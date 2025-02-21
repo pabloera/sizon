@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Controle de Middleware Zotero-Notion</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            color: #37352f;
+        }
+        .container {
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            padding: 20px;
+        }
+        h1 {
+            margin-top: 0;
+            font-size: 1.5em;
+            font-weight: 600;
+        }
+        .status {
+            display: flex;
+            align-items: center;
+            margin-bottom: 20px;
+            padding: 10px;
+            border-radius: 6px;
+            background-color: #f7f7f5;
+        }
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 10px;
+        }
+        .status-online {
+            background-color: #69c959;
+        }
+        .status-offline {
+            background-color: #e03e3e;
+        }
+        .status-unknown {
+            background-color: #d7d7d5;
+        }
+        .status-active {
+            background-color: #0b6e99;
+        }
+        .status-inactive {
+            background-color: #f2994a;
+        }
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .btn {
+            padding: 8px 16px;
+            border-radius: 4px;
+            border: none;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .btn-primary {
+            background-color: #2eaadc;
+            color: white;
+        }
+        .btn-primary:hover {
+            background-color: #2383ab;
+        }
+        .btn-danger {
+            background-color: #e03e3e;
+            color: white;
+        }
+        .btn-danger:hover {
+            background-color: #c93636;
+        }
+        .btn-secondary {
+            background-color: #f7f7f5;
+            color: #37352f;
+            border: 1px solid #d7d7d5;
+        }
+        .btn-secondary:hover {
+            background-color: #e9e9e7;
+        }
+        .settings {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #e9e9e7;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        input[type="number"] {
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid #d7d7d5;
+            width: 100px;
+        }
+        .log-container {
+            max-height: 200px;
+            overflow-y: auto;
+            background-color: #f7f7f5;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+            margin-top: 20px;
+        }
+        .log-entry {
+            margin-bottom: 5px;
+            border-bottom: 1px solid #e9e9e7;
+            padding-bottom: 5px;
+        }
+        .timestamp {
+            color: #888;
+            margin-right: 10px;
+        }
+        .error {
+            color: #e03e3e;
+        }
+        .success {
+            color: #69c959;
+        }
+        .info {
+            color: #2eaadc;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Controle do Middleware Zotero-Notion</h1>
+        
+        <div id="status" class="status">
+            <div id="statusIndicator" class="status-indicator status-unknown"></div>
+            <span id="statusText">Status desconhecido</span>
+        </div>
+        
+        <div class="btn-group">
+            <button id="startBtn" class="btn btn-primary">Iniciar Monitoramento</button>
+            <button id="stopBtn" class="btn btn-danger">Parar Monitoramento</button>
+            <button id="refreshBtn" class="btn btn-secondary">Atualizar Status</button>
+        </div>
+        
+        <div class="settings">
+            <h2>Processamento Manual</h2>
+            <div class="form-group">
+                <label for="itemLimit">Número de itens a processar:</label>
+                <input type="number" id="itemLimit" value="5" min="1" max="50">
+            </div>
+            <button id="processBtn" class="btn btn-secondary">Processar Itens</button>
+        </div>
+        
+        <!-- Nova seção de Sumarização Acadêmica (dentro do container) -->
+        <div class="settings">
+            <h2>Sumarização Acadêmica</h2>
+            <div class="form-group">
+                <label for="itemKey">ID do item do Zotero:</label>
+                <input type="text" id="itemKey" placeholder="Ex: ABC12345">
+            </div>
+            <button id="summarizeBtn" class="btn btn-primary">Gerar Resumo Acadêmico</button>
+            
+            <div class="form-group" style="margin-top: 15px;">
+                <label for="batchSummarizeLimit">Número de itens para sumarização em lote:</label>
+                <input type="number" id="batchSummarizeLimit" value="3" min="1" max="10">
+            </div>
+            <button id="batchSummarizeBtn" class="btn btn-secondary">Sumarizar em Lote</button>
+        </div>
+        
+        <div class="log-container" id="logContainer">
+            <div class="log-entry info">
+                <span class="timestamp">[00:00:00]</span>
+                <span>Sistema inicializado.</span>
+            </div>
+        </div>
+    </div>   
+
+    <script>
+        // Configuração - A URL da API é relativa ao local onde a página está sendo servida
+        const API_URL = '';
+        
+        // Elementos DOM
+        const statusIndicator = document.getElementById('statusIndicator');
+        const statusText = document.getElementById('statusText');
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const refreshBtn = document.getElementById('refreshBtn');
+        const processBtn = document.getElementById('processBtn');
+        const itemLimit = document.getElementById('itemLimit');
+        const logContainer = document.getElementById('logContainer');
+        
+        // Função para adicionar entrada de log
+        function addLog(message, type = 'info') {
+            const now = new Date();
+            const timeStr = now.toTimeString().split(' ')[0];
+            const logEntry = document.createElement('div');
+            logEntry.className = `log-entry ${type}`;
+            logEntry.innerHTML = `
+                <span class="timestamp">[${timeStr}]</span>
+                <span>${message}</span>
+            `;
+            logContainer.prepend(logEntry);
+        }
+        
+        // Função para atualizar o status
+        async function updateStatus() {
+            try {
+                statusIndicator.className = 'status-indicator status-unknown';
+                statusText.textContent = 'Verificando status...';
+                
+                const response = await fetch(`${API_URL}/status`);
+                if (!response.ok) {
+                    throw new Error('Não foi possível conectar ao servidor');
+                }
+                
+                const data = await response.json();
+                
+                // Atualiza indicador de status
+                statusIndicator.className = 'status-indicator status-online';
+                if (data.isMonitoringActive) {
+                    statusIndicator.classList.add('status-active');
+                    statusText.textContent = 'Online - Monitoramento Ativo';
+                    addLog('Sistema online e monitoramento ativo.');
+                } else {
+                    statusIndicator.classList.add('status-inactive');
+                    statusText.textContent = 'Online - Monitoramento Inativo';
+                    addLog('Sistema online, mas monitoramento está inativo.');
+                }
+                
+                // Atualiza estados dos botões
+                startBtn.disabled = data.isMonitoringActive;
+                stopBtn.disabled = !data.isMonitoringActive;
+                
+            } catch (error) {
+                statusIndicator.className = 'status-indicator status-offline';
+                statusText.textContent = 'Offline - Não foi possível conectar';
+                addLog(`Erro de conexão: ${error.message}`, 'error');
+                console.error('Erro ao verificar status:', error);
+            }
+        }
+        
+        // Iniciar monitoramento
+        async function startMonitoring() {
+            try {
+                addLog('Iniciando monitoramento...', 'info');
+                startBtn.disabled = true;
+                
+                const response = await fetch(`${API_URL}/start`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (data.status === 'started') {
+                    addLog('Monitoramento iniciado com sucesso!', 'success');
+                } else {
+                    addLog(`Status: ${data.message}`, 'info');
+                }
+                
+                updateStatus();
+                
+            } catch (error) {
+                addLog(`Erro ao iniciar monitoramento: ${error.message}`, 'error');
+                console.error('Erro ao iniciar monitoramento:', error);
+                startBtn.disabled = false;
+            }
+        }
+        
+        // Parar monitoramento
+        async function stopMonitoring() {
+            try {
+                addLog('Parando monitoramento...', 'info');
+                stopBtn.disabled = true;
+                
+                const response = await fetch(`${API_URL}/stop`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (data.status === 'stopped') {
+                    addLog('Monitoramento interrompido com sucesso!', 'success');
+                } else {
+                    addLog(`Status: ${data.message}`, 'info');
+                }
+                
+                updateStatus();
+                
+            } catch (error) {
+                addLog(`Erro ao parar monitoramento: ${error.message}`, 'error');
+                console.error('Erro ao parar monitoramento:', error);
+                stopBtn.disabled = false;
+            }
+        }
+        
+        // Processar itens manualmente
+        async function processItems() {
+            try {
+                const limit = parseInt(itemLimit.value);
+                
+                if (isNaN(limit) || limit < 1) {
+                    addLog('Por favor, informe um número válido de itens.', 'error');
+                    return;
+                }
+                
+                addLog(`Processando ${limit} itens...`, 'info');
+                processBtn.disabled = true;
+                
+                const response = await fetch(`${API_URL}/process`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ limit })
+                });
+                
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    addLog(`${data.message}`, 'success');
+                } else {
+                    addLog(`Erro: ${data.message}`, 'error');
+                }
+                
+            } catch (error) {
+                addLog(`Erro ao processar itens: ${error.message}`, 'error');
+                console.error('Erro ao processar itens:', error);
+            } finally {
+                processBtn.disabled = false;
+            }
+        }
+
+        // Sumarização acadêmica para um item específico
+async function summarizeItem() {
+  try {
+    const itemKey = document.getElementById('itemKey').value.trim();
+    
+    if (!itemKey) {
+      addLog('Por favor, informe o ID do item do Zotero.', 'error');
+      return;
+    }
+    
+    addLog(`Iniciando sumarização acadêmica para o item ${itemKey}...`, 'info');
+    summarizeBtn.disabled = true;
+    
+    const response = await fetch(`${API_URL}/summarize`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ itemKey })
+    });
+    
+    const data = await response.json();
+    
+    if (data.status === 'success') {
+      addLog(`Sumarização acadêmica concluída com sucesso para ${itemKey}!`, 'success');
+    } else {
+      addLog(`Erro: ${data.message}`, 'error');
+    }
+    
+  } catch (error) {
+    addLog(`Erro ao realizar sumarização: ${error.message}`, 'error');
+    console.error('Erro na sumarização:', error);
+  } finally {
+    summarizeBtn.disabled = false;
+  }
+}
+
+// Sumarização acadêmica em lote
+async function summarizeBatch() {
+  try {
+    const limit = parseInt(document.getElementById('batchSummarizeLimit').value);
+    
+    if (isNaN(limit) || limit < 1) {
+      addLog('Por favor, informe um número válido de itens.', 'error');
+      return;
+    }
+    
+    addLog(`Iniciando sumarização acadêmica em lote para ${limit} itens...`, 'info');
+    batchSummarizeBtn.disabled = true;
+    
+    const response = await fetch(`${API_URL}/summarize-batch`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ limit })
+    });
+    
+    const data = await response.json();
+    
+    if (data.status === 'processing') {
+      addLog(`${data.message}. Este processo pode demorar vários minutos.`, 'info');
+    } else {
+      addLog(`Erro: ${data.message}`, 'error');
+    }
+    
+  } catch (error) {
+    addLog(`Erro ao iniciar sumarização em lote: ${error.message}`, 'error');
+    console.error('Erro na sumarização em lote:', error);
+  } finally {
+    batchSummarizeBtn.disabled = false;
+  }
+}
+
+// Adicionar aos event listeners
+document.getElementById('summarizeBtn').addEventListener('click', summarizeItem);
+document.getElementById('batchSummarizeBtn').addEventListener('click', summarizeBatch);
+
+        
+        // Event listeners
+        startBtn.addEventListener('click', startMonitoring);
+        stopBtn.addEventListener('click', stopMonitoring);
+        refreshBtn.addEventListener('click', updateStatus);
+        processBtn.addEventListener('click', processItems);
+        
+        // Inicialização
+        document.addEventListener('DOMContentLoaded', () => {
+            addLog('Interface de controle inicializada.', 'info');
+            updateStatus();
+            
+            // Verificar status a cada 5 minutos
+            setInterval(updateStatus, 5 * 60 * 1000);
+        });
+    </script>
+</body>
+</html>
